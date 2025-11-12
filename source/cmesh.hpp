@@ -1,0 +1,441 @@
+//
+// Mesh Context from Modo.
+// This class contains triangulated polygons and the veritices converted from Modo mesh.
+//
+#pragma once
+
+#include <lxsdk/lx_log.hpp>
+#include <lxsdk/lx_mesh.hpp>
+#include <lxsdk/lx_value.hpp>
+#include <lxsdk/lxu_math.hpp>
+#include <lxsdk/lxvmath.h>
+#include <lxsdk/lxu_matrix.hpp>
+#include <lxsdk/lxu_quaternion.hpp>
+
+#include <vector>
+#include <unordered_set>
+
+#include "util.hpp"
+#include "triangulate.hpp"
+
+struct CVerx;
+struct CEdge;
+struct CTriangle;
+struct CFace;
+
+typedef std::shared_ptr<CVerx>     CVerxID;
+typedef std::shared_ptr<CEdge>     CEdgeID;
+typedef std::shared_ptr<CTriangle> CTriangleID;
+
+struct CVerx
+{
+    CTriangleID                 tri;
+    LXtPointID                  vrt;
+    unsigned                    vrt_index;
+    unsigned                    index;
+    LXtVector                   pos;        // vertex position
+    LXtVector                   new_pos;       // new vertex position
+    void*                       userData;   // any working data
+    LXtMarkMode                 marks;      // marks for working
+    std::vector<CEdgeID>        edge;       // connecting edges
+    std::vector<CTriangleID>    tris;       // connecting triangles
+};
+
+struct CEdge
+{
+    CVerxID                     v0, v1;  // vertex 1,2
+    std::vector<CTriangleID>    tris;       // connecting triangles
+};
+
+struct CTriangle
+{
+    LXtPolygonID                pol;
+    int                         pol_index;
+    unsigned                    index;
+    unsigned                    proxy;
+    CVerxID                     v0, v1, v2;
+    CEdgeID                     edge;      // an edge
+    bool                        deleted;   // triangle deleted flag
+    bool                        updated;   // triangle updated flag
+};
+
+struct CFace
+{
+    std::vector<CTriangleID>    tris = {};  // triangles of the face
+};
+
+struct CMesh
+{
+    CMesh()
+    {
+        CLxUser_MeshService mesh_svc;
+        m_pick      = mesh_svc.SetMode(LXsMARK_SELECT);
+        m_mark_done = mesh_svc.SetMode(LXsMARK_USER_0);
+        m_mark_seam = mesh_svc.SetMode(LXsMARK_USER_1);
+        m_mark_hide = mesh_svc.SetMode(LXsMARK_HIDE);
+        m_mark_lock = mesh_svc.SetMode(LXsMARK_LOCK);
+    }
+
+    LxResult AddPolygon(LXtPolygonID pol)
+    {
+        CFace face;
+        m_faces[pol] = face;
+        return LXe_OK;
+    }
+
+    LxResult AddTriangle(LXtPolygonID pol, LXtPointID v0, LXtPointID v1, LXtPointID v2)
+    {
+        m_triangles.push_back(std::make_shared<CTriangle>());
+        CTriangleID tri = m_triangles.back();
+        tri->index = static_cast<int>(m_triangles.size()-1);
+
+        CVerxID dv[3];
+        dv[0] = AddVertex(v0, pol, tri);
+        dv[1] = AddVertex(v1, pol, tri);
+        dv[2] = AddVertex(v2, pol, tri);
+
+        CLxUser_Edge edge;
+        edge.fromMesh(m_mesh);
+
+        if (pol)
+        {
+            CFace& face = m_faces[pol];
+            face.tris.push_back(tri);
+        }
+
+        tri->v0   = dv[0];
+        tri->v1   = dv[1];
+        tri->v2   = dv[2];
+        tri->pol  = pol;
+        tri->updated = false;
+        tri->deleted = false;
+        tri->proxy = 0;
+
+        AddEdge(dv[0], dv[1], tri);
+        AddEdge(dv[1], dv[2], tri);
+        AddEdge(dv[2], dv[0], tri);
+        return LXe_OK;
+    }
+
+    LxResult AddEdge(CVerxID v0, CVerxID v1, CTriangleID tri)
+    {
+        // Check if the edge already exists
+        for (auto& edge : v0->edge)
+        {
+            if ((edge->v0 == v0 && edge->v1 == v1) || (edge->v0 == v1 && edge->v1 == v0))
+            {
+                edge->tris.push_back(tri);
+                return LXe_OK;
+            }
+        }
+
+        // Create a new edge
+        m_edges.push_back(std::make_shared<CEdge>());
+        CEdgeID edge = m_edges.back();
+        edge->v0 = v0;
+        edge->v1 = v1;
+        edge->tris.push_back(tri);
+
+        v0->edge.push_back(edge);
+        v1->edge.push_back(edge);
+        return LXe_OK;
+    }
+
+    LXtPolygonID TracePolygon(LXtPointID vrt, LXtPolygonID pol, int shift)
+    {
+        CLxUser_Edge edge;
+        edge.fromMesh(m_mesh);
+
+        CLxUser_Polygon poly;
+        poly.fromMesh(m_mesh);
+
+        LXtPolygonID pol1;
+        LXtPointID   vrt1;
+        unsigned int npol, nvert;
+
+        m_poly.Select(pol);
+        m_poly.VertexCount(&nvert);
+
+        for (auto i = 0u; i < nvert; i++)
+        {
+            m_poly.VertexByIndex(i, &vrt1);
+            if (vrt1 == vrt)
+            {
+                m_poly.VertexByIndex((i + shift + nvert) % nvert, &vrt1);
+                edge.SelectEndpoints(vrt, vrt1);
+                edge.PolygonCount(&npol);
+                for (auto j = 0u; j < npol; j++)
+                {
+                    edge.PolygonByIndex(j, &pol1);
+                    poly.Select(pol1);
+                    if (poly.TestMarks(m_mark_hide) == LXe_TRUE)
+                        continue;
+                    if (poly.TestMarks(m_mark_lock) == LXe_TRUE)
+                        continue;
+                    if (pol1 != pol)
+                    {
+                        return pol1;
+                    }
+                }
+                return nullptr;
+            }
+        }
+        return nullptr;
+    }
+
+    // Find and get the CTriangle with the given vrt and pol.
+    CTriangleID FetchTriangle(LXtPointID vrt, LXtPolygonID pol)
+    {
+        LXtPolygonID pol0 = pol;
+        unsigned int npol;
+
+        m_vert.Select(vrt);
+        m_vert.PolygonCount(&npol);
+
+        if (m_faces.find(pol) != m_faces.end())
+        {
+            CFace& face = m_faces[pol];
+            for (auto& tri : face.tris)
+            {
+                if (tri->v0->vrt == vrt || tri->v1->vrt == vrt || tri->v2->vrt == vrt)
+                    return tri;
+            }
+        }
+        npol--;
+
+        pol = pol0;
+        while (npol > 0)
+        {
+            pol = TracePolygon(vrt, pol, +1);
+            if (!pol)
+                break;
+            if (pol == pol0)
+                break;
+            if (m_faces.find(pol) != m_faces.end())
+            {
+                CFace& face = m_faces[pol];
+                for (auto& tri : face.tris)
+                {
+                    if (tri->v0->vrt == vrt || tri->v1->vrt == vrt || tri->v2->vrt == vrt)
+                        return tri;
+                }
+            }
+            npol--;
+        }
+
+        pol = pol0;
+        while (npol > 0)
+        {
+            pol = TracePolygon(vrt, pol, -1);
+            if (!pol)
+                break;
+            if (pol == pol0)
+                break;
+            if (m_faces.find(pol) != m_faces.end())
+            {
+                CFace& face = m_faces[pol];
+                for (auto& tri : face.tris)
+                {
+                    if (tri->v0->vrt == vrt || tri->v1->vrt == vrt || tri->v2->vrt == vrt)
+                        return tri;
+                }
+            }
+            npol--;
+        }
+
+        return nullptr;
+    }
+
+    CVerxID FetchVertex(LXtPointID vrt)
+    {
+        m_vert.Select(vrt);
+        unsigned count;
+        m_vert.PolygonCount(&count);
+        for (auto i = 0u; i < count; i++)
+        {
+            LXtPolygonID pol;
+            m_vert.PolygonByIndex(i, &pol);
+            CTriangleID ref = FetchTriangle(vrt, pol);
+            if (ref)
+            {
+                if (ref->v0->vrt == vrt)
+                    return ref->v0;
+                if (ref->v1->vrt == vrt)
+                    return ref->v1;
+                if (ref->v2->vrt == vrt)
+                    return ref->v2;
+            }
+        }
+        return nullptr;
+    }
+
+    CVerxID AddVertex(LXtPointID vrt, LXtPolygonID pol, CTriangleID tri)
+    {
+        if (!pol)
+        {
+            return FetchVertex(vrt);
+        }
+        //printf("AddVertex vrt (%p) pol (%p)", vrt, pol);
+        CTriangleID ref = FetchTriangle(vrt, pol);
+        if (ref)
+        {
+            CVerxID dv = nullptr;
+
+            if (ref->v0->vrt == vrt)
+                dv = ref->v0;
+            if (ref->v1->vrt == vrt)
+                dv = ref->v1;
+            if (ref->v2->vrt == vrt)
+                dv = ref->v2;
+
+            if (dv)
+            {
+                dv->tris.push_back(tri);
+                return dv;
+            }
+        }
+
+        m_vertices.push_back(std::make_shared<CVerx>());
+        CVerxID dv = m_vertices.back();
+
+        dv->tris.push_back(tri);
+        dv->vrt   = vrt;
+        dv->tri   = tri;
+        dv->index = static_cast<unsigned>(m_vertices.size()-1);
+        dv->marks = LXiMARK_ANY;
+        m_vert.Select(vrt);
+        LXtFVector pos;
+        m_vert.Pos(pos);
+        LXx_VCPY(dv->pos, pos);
+        LXx_VCPY(dv->new_pos, pos);
+        m_vert.Index(&dv->vrt_index);
+        return dv;
+    }
+
+    // Visitor to build triangles from polygons
+    //
+    class TripleFaceVisitor : public CLxImpl_AbstractVisitor
+    {
+    public:
+        LxResult Evaluate()
+        {
+            unsigned nvert;
+            m_poly.VertexCount(&nvert);
+            if (nvert < 3)
+                return LXe_OK;
+
+            m_poly.SetMarks(m_mark_done);
+
+            LXtID4 type;
+            m_poly.Type(&type);
+            if ((type != LXiPTYP_FACE) && (type != LXiPTYP_PSUB) && (type != LXiPTYP_SUBD))
+                return LXe_OK;
+
+            m_context->AddPolygon(m_poly.ID());
+
+            std::vector<LXtPointID> points;
+
+            LXtPointID v0, v1, v2;
+            if (nvert == 3)
+            {
+                m_poly.VertexByIndex(0, &v0);
+                m_poly.VertexByIndex(1, &v1);
+                m_poly.VertexByIndex(2, &v2);
+                m_context->AddTriangle(m_poly.ID(), v0, v1, v2);
+            }
+            else if (MeshUtil::PolygonFixedVertexList(m_mesh, m_poly, points))
+            {
+                bool done = false;
+                if (nvert > 4)
+                {
+                    LXtVector norm;
+                    //MeshUtil::VertexListNormal(m_mesh, points, norm);
+                    m_poly.Normal(norm);
+                    AxisPlane axisPlane(norm);
+                    std::vector<std::vector<LXtPointID>> tris;
+                    CTriangulate ctri(m_mesh);
+                    LxResult result = LXe_OK;
+                    result = ctri.ConstraintDelaunay(axisPlane, points, tris);
+                    if (result == LXe_OK)
+                    {
+                        for (auto& vert : tris)
+                        {
+                            m_context->AddTriangle(m_poly.ID(), vert[0], vert[1], vert[2]);
+                        }
+                        done = true;
+                    }
+                }
+                if (!done)
+                {
+                    v0 = points[0];
+                    for (auto i = 1u; i < points.size()-1; i++)
+                    {
+                        v1 = points[i];
+                        v2 = points[i+1];
+                        m_context->AddTriangle(m_poly.ID(), v0, v1, v2);
+                    }
+                }
+            }
+            else
+            {
+                unsigned count;
+                m_poly.GenerateTriangles(&count);
+                for (auto i = 0u; i < count; i++)
+                {
+                    m_poly.TriangleByIndex(i, &v0, &v1, &v2);
+                    m_context->AddTriangle(m_poly.ID(), v0, v1, v2);
+                }
+            }
+            return LXe_OK;
+        }
+
+        CLxUser_Mesh    m_mesh;
+        CLxUser_Polygon m_poly;
+        CLxUser_Point   m_vert;
+        LXtMarkMode     m_mark_done;
+        struct CMesh*  m_context;
+    };
+
+    // Build internal mesh representation
+    //
+    LxResult BuildMesh(CLxUser_Mesh& base_mesh)
+    {
+        CLxUser_MeshService mesh_svc;
+        TripleFaceVisitor triFace;
+
+        m_mesh.set(base_mesh);
+        m_poly.fromMesh(m_mesh);
+        m_vert.fromMesh(m_mesh);
+        m_vmap.fromMesh(m_mesh);
+
+        triFace.m_mesh = m_mesh;
+        triFace.m_poly.fromMesh(m_mesh);
+        triFace.m_vert.fromMesh(m_mesh);
+        triFace.m_mark_done = mesh_svc.ClearMode(LXsMARK_USER_0);
+        triFace.m_context = this;
+        triFace.m_poly.Enum(&triFace, LXiMARK_ANY);
+        printf("Build mesh with %zu vertices %zu triangles %zu edges\n", m_vertices.size(), m_triangles.size(), m_edges.size());
+        return LXe_OK;
+    }
+
+    std::vector<CEdgeID>     m_edges;
+    std::vector<CVerxID>     m_vertices;
+    std::vector<CTriangleID> m_triangles;
+
+    std::unordered_map<LXtPolygonID, CFace> m_faces;
+
+    CLxUser_Mesh        m_mesh;
+    CLxUser_Edge        m_edge;
+    CLxUser_Polygon     m_poly;
+    CLxUser_Point       m_vert;
+    CLxUser_MeshMap     m_vmap;
+    CLxUser_PolygonEdit m_poledit;
+    CLxUser_LogService  s_log;
+    CLxUser_MeshService s_mesh;
+
+    LXtMarkMode m_pick;
+    LXtMarkMode m_mark_done;
+    LXtMarkMode m_mark_seam;
+    LXtMarkMode m_mark_hide;
+    LXtMarkMode m_mark_lock;
+};
