@@ -46,9 +46,11 @@ struct CApproximate
     CMesh m_cmesh;
 
     // CGAL surface mesh
-    Surface_mesh m_output;
+    std::vector<Surface_mesh> m_outputs;
 
-    std::vector<CTriangleID> m_proxy_source;
+    std::vector<std::vector<CTriangleID>> m_proxy_sources;
+
+    unsigned m_part;    // current connecting part
 
     CLxUser_Mesh        m_mesh;
     CLxUser_Edge        m_edge;
@@ -102,6 +104,7 @@ struct CApproximate
     //
     LxResult BuildMesh (CLxUser_Mesh& base_mesh);
     LxResult ApproximateMesh (CLxUser_Mesh& base_mesh);
+    LxResult ApproximatePart (CLxUser_Mesh& base_mesh, CPartID part);
     LxResult WriteSegmentations (CLxUser_Mesh& edit_mesh);
     LxResult WriteApproximation (CLxUser_Mesh& edit_mesh);
 };

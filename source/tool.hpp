@@ -74,6 +74,8 @@ class CToolOp : public CLxImpl_ToolOperation
         unsigned offset_subject;
         unsigned offset_input;
 
+        unsigned m_flags;
+
         int    m_mode;      // Approximation mode
         int    m_proxies;
         int    m_iteration;
@@ -100,6 +102,7 @@ public:
 	LxResult	tool_GetOp(void **ppvObj, unsigned flags) LXx_OVERRIDE;
 
     unsigned    tmod_Flags() LXx_OVERRIDE;
+	//void		tmod_Initialize (ILxUnknownID vts, ILxUnknownID adjust, unsigned flags) LXx_OVERRIDE;
     LxResult    tmod_Enable(ILxUnknownID obj) LXx_OVERRIDE;
     LxResult    tmod_Down(ILxUnknownID vts, ILxUnknownID adjust) LXx_OVERRIDE;
     void        tmod_Move(ILxUnknownID vts, ILxUnknownID adjust) LXx_OVERRIDE;
@@ -133,6 +136,6 @@ public:
 	LXtItemType m_itemType;
 
     static LXtTagInfoDesc descInfo[];
-    int    m_iteration0;
+    int    m_proxies0;
 };
 

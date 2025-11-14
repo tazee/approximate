@@ -19,9 +19,6 @@
 #include <cstdlib>  // rand(), RAND_MAX
 #include <ctime>    // time()
 
-//#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
-//#include <CGAL/Surface_mesh.h>
-
 #include <CGAL/Surface_mesh_approximation/approximate_triangle_mesh.h>
  
 #include <CGAL/Polygon_mesh_processing/orient_polygon_soup.h>
@@ -34,10 +31,6 @@
 //
 // Mesh Approximation class.
 //
-
-//typedef CGAL::Exact_predicates_inexact_constructions_kernel     Kernel;
-//typedef Kernel::Point_3                                         Point_3;
-//typedef CGAL::Surface_mesh<Point_3>                             Surface_mesh;
 typedef boost::graph_traits<Surface_mesh>::face_descriptor      face_descriptor;
 typedef Surface_mesh::Property_map<face_descriptor, std::size_t> Face_proxy_pmap;
 typedef std::size_t                                             cluster_id_t;
@@ -45,6 +38,30 @@ typedef boost::property_map<Surface_mesh, boost::vertex_point_t>::type Vertex_po
  
 namespace VSA = CGAL::Surface_mesh_approximation;
 namespace PMP = CGAL::Polygon_mesh_processing;
+
+static std::vector<std::array<float,3>> g_proxy_color;
+
+static void UpdateProxyColors(size_t proxy_count)
+{
+    if (g_proxy_color.size() == 0)
+    {
+        std::srand(static_cast<unsigned int>(std::time(nullptr)));
+    }
+
+    if (proxy_count > g_proxy_color.size())
+    {
+        auto nadd = proxy_count - g_proxy_color.size();
+        for (auto i = 0u; i < nadd; i++)
+        {
+            std::array<float,3> color;
+            for (auto j = 0u; j < 3; j++)
+            {
+                color[j] = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+            }
+            g_proxy_color.push_back(color);
+        }
+    }
+}
 
 //
 // Convert the internal CApproximate mesh representation to a CGAL Surface_mesh.
@@ -125,6 +142,25 @@ static void ConvertToCGALMesh(Surface_mesh& out_mesh, std::map<Surface_mesh::Edg
         }
     }
 }
+static void ConvertToCGALMesh(Surface_mesh& out_mesh, CPartID part)
+{
+    std::unordered_map<CVerxID, Surface_mesh::Vertex_index> vertex_map;
+
+    for (auto& v : part->vrts)
+    {
+        Point_3 p(v->pos[0], v->pos[1], v->pos[2]);
+        Surface_mesh::Vertex_index vi = out_mesh.add_vertex(p);
+        vertex_map[v] = vi;
+    }
+
+    for (auto& tri : part->tris)
+    {
+        Surface_mesh::Vertex_index v0 = vertex_map[tri->v0];
+        Surface_mesh::Vertex_index v1 = vertex_map[tri->v1];
+        Surface_mesh::Vertex_index v2 = vertex_map[tri->v2];
+        out_mesh.add_face(v0, v1, v2);
+    }
+}
 
 static void PrintCGALMesh(Surface_mesh& mesh)
 {
@@ -200,10 +236,89 @@ LxResult CApproximate::BuildMesh(CLxUser_Mesh& base_mesh)
 //
 // Variational Shape Approximation
 //
+LxResult CApproximate::ApproximatePart(CLxUser_Mesh& base_mesh, CPartID part)
+{
+    std::cout << "*** Part: " << part->index << " tris : " << part->tris.size() << " vrts : " << part->vrts.size() << std::endl;
+
+    Surface_mesh surface_mesh;
+    ConvertToCGALMesh(surface_mesh, part);
+    //PrintCGALMesh(surface_mesh);
+
+    auto fpxmap = surface_mesh.add_property_map<face_descriptor, cluster_id_t>("f:proxy_id", 0).first;
+
+    // The output will be an indexed triangle mesh
+    std::vector<Point_3> anchors;
+    std::vector<std::array<std::size_t, 3> > triangles;
+
+    // free function interface with named parameters
+    bool is_manifold = VSA::approximate_triangle_mesh(surface_mesh,
+                CGAL::parameters::verbose_level(VSA::MAIN_STEPS).
+                                max_number_of_proxies(m_proxies).
+                                number_of_iterations(m_iteration). // number of relaxation iterations after 
+                                anchors(std::back_inserter(anchors)). // anchor points
+                                triangles(std::back_inserter(triangles)).
+                                face_proxy_map(fpxmap)); // indexed triangles
+
+    std::cout << "#is_manifold: " << is_manifold << std::endl;
+    std::cout << "#anchor points: " << anchors.size() << std::endl;
+    std::cout << "#triangles: " << triangles.size() << std::endl;
+
+    //Surface_mesh output;
+    Surface_mesh output;
+    //m_output.clear();
+    //m_proxy_source.clear();
+ 
+    if (is_manifold) {
+        //std::cout << "oriented, 2-manifold output." << std::endl;
+
+        // convert from soup to surface mesh
+        PMP::orient_polygon_soup(anchors, triangles);
+        PMP::polygon_soup_to_polygon_mesh(anchors, triangles, output);
+        if (CGAL::is_closed(output) && (!PMP::is_outward_oriented(output)))
+            PMP::reverse_face_orientations(output);
+        //PrintCGALMesh (output);
+        m_outputs.push_back(output);
+
+        unsigned proxy_count = 0;
+        for (auto f : surface_mesh.faces())
+        {
+            //std::cout << "face : " << f << " proxy : " << fpxmap[f] << std::endl;
+            part->tris[f]->proxy = fpxmap[f];
+            if (part->tris[f]->proxy > proxy_count)
+                proxy_count = part->tris[f]->proxy;
+        }
+        std::vector<CTriangleID> proxy_source;
+        proxy_count ++;
+        proxy_source.resize(proxy_count);
+        for (auto tri : part->tris)
+        {
+            proxy_source[tri->proxy] = tri;
+            //std::cout << "tri : " << tri->index << " proxy : " << tri->proxy << std::endl;
+        }
+        m_proxy_sources.push_back(proxy_source);
+        std::cout << "proxy_count : " << proxy_count << std::endl;
+    }
+
+    return LXe_OK;
+}
+
+//
+// Variational Shape Approximation
+//
 LxResult CApproximate::ApproximateMesh(CLxUser_Mesh& base_mesh)
 {
     BuildMesh(base_mesh);
 
+    m_proxy_sources.clear();
+    m_outputs.clear();
+
+    for (auto part : m_cmesh.m_parts)
+    {
+        auto result = ApproximatePart(base_mesh, part);
+        if (result != LXe_OK)
+            continue;
+    }
+/*
     Surface_mesh surface_mesh;
     std::map<Surface_mesh::Edge_index, bool> constrained_edges;
     ConvertToCGALMesh(surface_mesh, constrained_edges, this);
@@ -259,6 +374,7 @@ LxResult CApproximate::ApproximateMesh(CLxUser_Mesh& base_mesh)
         }
         std::cout << "proxy_count : " << proxy_count << std::endl;
     }
+*/
 
     return LXe_OK;
 }
@@ -268,7 +384,10 @@ LxResult CApproximate::ApproximateMesh(CLxUser_Mesh& base_mesh)
 //
 LxResult CApproximate::WriteApproximation(CLxUser_Mesh& edit_mesh)
 {
-    ConvertFromCGALMesh(m_output, edit_mesh);
+    for (auto& output : m_outputs)
+    {
+        ConvertFromCGALMesh(output, edit_mesh);
+    }
     return LXe_OK;
 }
 
@@ -319,7 +438,6 @@ LxResult CApproximate::WriteSegmentations(CLxUser_Mesh& edit_mesh)
             type = LXi_PTAG_PART;
 
         LXtMeshMapID    vmap_id = nullptr;
-        std::vector<std::vector<float>> proxy_color;
         if (m_set_color)
         {
             if (LXx_FAIL(m_vmap.SelectByName(LXi_VMAP_RGB, "Segment")))
@@ -327,22 +445,21 @@ LxResult CApproximate::WriteSegmentations(CLxUser_Mesh& edit_mesh)
             else
                 vmap_id = m_vmap.ID();
             std::srand(static_cast<unsigned int>(std::time(nullptr)));
-            auto proxy_count = m_proxy_source.size();
-            proxy_color.resize(proxy_count);
-            for (auto i = 0u; i < proxy_count; i++)
+            auto proxy_count = m_proxy_sources[0].size();
+            for (auto i = 1u; i < m_proxy_sources.size(); i++)
             {
-                proxy_color[i].resize(3);
-                for (auto j = 0u; j < 3; j++)
-                {
-                    proxy_color[i][j] = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-                }
+                if (m_proxy_sources[i].size() > proxy_count)
+                    proxy_count = m_proxy_sources[i].size();
             }
+            UpdateProxyColors(proxy_count);
         }
         for (auto& face : m_cmesh.m_faces)
         {
             CTriangleID tri = face.second.tris[0];
             m_poly.Select(face.first);
             std::string tag = std::to_string(tri->proxy);
+            if (m_proxy_sources.size() > 1)
+                tag = std::to_string(face.second.part) + "-" + tag;
             polyTag.set(m_poly);
             polyTag.Set(type, tag.c_str());
             if (m_set_color)
@@ -350,7 +467,7 @@ LxResult CApproximate::WriteSegmentations(CLxUser_Mesh& edit_mesh)
                 unsigned count;
                 float color[3];
                 for (auto i = 0u; i < 3; ++i)
-                    color[i] = proxy_color[tri->proxy][i];
+                    color[i] = g_proxy_color[tri->proxy][i];
                 m_poly.VertexCount(&count);
                 for (auto i = 0u; i < count; i++)
                 {

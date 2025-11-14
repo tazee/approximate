@@ -22,10 +22,12 @@ struct CVerx;
 struct CEdge;
 struct CTriangle;
 struct CFace;
+struct CPart;
 
 typedef std::shared_ptr<CVerx>     CVerxID;
 typedef std::shared_ptr<CEdge>     CEdgeID;
 typedef std::shared_ptr<CTriangle> CTriangleID;
+typedef std::shared_ptr<CPart>     CPartID;
 
 struct CVerx
 {
@@ -33,6 +35,7 @@ struct CVerx
     LXtPointID                  vrt;
     unsigned                    vrt_index;
     unsigned                    index;
+    unsigned                    part;
     LXtVector                   pos;        // vertex position
     LXtVector                   new_pos;       // new vertex position
     void*                       userData;   // any working data
@@ -52,6 +55,7 @@ struct CTriangle
     LXtPolygonID                pol;
     int                         pol_index;
     unsigned                    index;
+    unsigned                    part;
     unsigned                    proxy;
     CVerxID                     v0, v1, v2;
     CEdgeID                     edge;      // an edge
@@ -61,7 +65,16 @@ struct CTriangle
 
 struct CFace
 {
+    unsigned                    part;  // part index
     std::vector<CTriangleID>    tris = {};  // triangles of the face
+};
+
+struct CPart
+{
+    unsigned                    index;
+    bool                        no_source = false;
+    std::vector<CTriangleID>    tris = {};  // triangles of the part
+    std::vector<CVerxID>        vrts = {};  // vertices of the triangles
 };
 
 struct CMesh
@@ -396,6 +409,92 @@ struct CMesh
         struct CMesh*  m_context;
     };
 
+    class PartFaceVisitor : public CLxImpl_AbstractVisitor
+    {
+    public:
+        LxResult Evaluate()
+        {
+            CLxUser_LogService   s_log;
+            unsigned nvert;
+            m_poly.VertexCount(&nvert);
+            if (nvert < 3)
+                return LXe_OK;
+
+            LXtID4 type;
+            m_poly.Type(&type);
+            if ((type != LXiPTYP_FACE) && (type != LXiPTYP_PSUB) && (type != LXiPTYP_SUBD))
+                return LXe_OK;
+
+            if (m_poly.TestMarks(m_mark_done) == LXe_TRUE)
+                return LXe_OK;
+
+            m_context->m_parts.push_back(std::make_shared<CPart>());
+            CPartID part = m_context->m_parts.back();
+
+            part->index = static_cast<unsigned>(m_context->m_parts.size() - 1);
+
+            CLxUser_Polygon poly, poly1;
+            poly.fromMesh(m_mesh);
+            poly1.fromMesh(m_mesh);
+            CLxUser_Edge edge;
+            edge.fromMesh(m_mesh);
+
+            std::vector<LXtPolygonID> stack;
+            LXtPolygonID              pol = m_poly.ID();
+            stack.push_back(pol);
+            m_poly.SetMarks(m_context->m_mark_done);
+
+            while (!stack.empty())
+            {
+                pol = stack.back();
+                stack.pop_back();
+                poly.Select(pol);
+                CFace& face = m_context->m_faces[pol];
+                face.part   = part->index;
+                for(auto& tri : face.tris)
+                {
+                    tri->part = part->index;
+                    part->tris.push_back(tri);
+                    tri->v0->part = part->index;
+                    tri->v1->part = part->index;
+                    tri->v2->part = part->index;
+                }
+                unsigned int nvert = 0u, npol = 0u;
+                poly.VertexCount(&nvert);
+                for (auto i = 0u; i < nvert; i++)
+                {
+                    LXtPointID v0{}, v1{};
+                    poly.VertexByIndex(i, &v0);
+                    poly.VertexByIndex((i + 1) % nvert, &v1);
+                    edge.SelectEndpoints(v0, v1);
+                    edge.PolygonCount(&npol);
+                    for (auto j = 0u; j < npol; j++)
+                    {
+                        LXtPolygonID pol1;
+                        edge.PolygonByIndex(j, &pol1);
+                        poly1.Select(pol1);
+                        if (poly1.TestMarks(m_mark_done) == LXe_TRUE)
+                            continue;
+                        poly1.SetMarks(m_mark_done);
+                        if (poly1.TestMarks(m_context->m_mark_hide) == LXe_TRUE)
+                            continue;
+                        if (poly1.TestMarks(m_context->m_mark_lock) == LXe_TRUE)
+                            continue;
+                        stack.push_back(pol1);
+                    }
+                }
+            }
+
+            return LXe_OK;
+        }
+
+        CLxUser_Mesh    m_mesh;
+        CLxUser_Polygon m_poly;
+        CLxUser_Point   m_vert;
+        LXtMarkMode     m_mark_done;
+        struct CMesh*   m_context;
+    };
+
     // Build internal mesh representation
     //
     LxResult BuildMesh(CLxUser_Mesh& base_mesh)
@@ -413,14 +512,84 @@ struct CMesh
         triFace.m_vert.fromMesh(m_mesh);
         triFace.m_mark_done = mesh_svc.ClearMode(LXsMARK_USER_0);
         triFace.m_context = this;
-        triFace.m_poly.Enum(&triFace, LXiMARK_ANY);
-        printf("Build mesh with %zu vertices %zu triangles %zu edges\n", m_vertices.size(), m_triangles.size(), m_edges.size());
+        triFace.m_poly.Enum(&triFace, m_pick);
+
+        // divides polygons into parts.
+        PartFaceVisitor partFace;
+        partFace.m_mesh = m_mesh;
+        partFace.m_poly.fromMesh(m_mesh);
+        partFace.m_vert.fromMesh(m_mesh);
+        partFace.m_mark_done = mesh_svc.SetMode(LXsMARK_USER_0);
+        partFace.m_context = this;
+        partFace.m_poly.Enum(&partFace, m_pick);
+
+        for (auto& v : m_vertices)
+        {
+            m_parts[v->part]->vrts.push_back(v);
+        }
+        printf("Build mesh with %zu vertices %zu triangles %zu parts\n", m_vertices.size(), m_triangles.size(), m_parts.size());
         return LXe_OK;
     }
+
+    void Clear()
+    {
+        m_vertices.clear();
+        m_edges.clear();
+        m_triangles.clear();
+        m_faces.clear();
+        m_parts.clear();
+    }
+
+    LxResult Remove(CLxUser_Mesh& edit_mesh)
+    {
+        m_mesh.set(edit_mesh);
+        m_poly.fromMesh(m_mesh);
+        m_vert.fromMesh(m_mesh);
+
+        LxResult result = LXe_OK;
+
+        for (auto& vert : m_vertices)
+        {
+            m_vert.Select(vert->vrt);
+            unsigned count;
+            m_vert.PolygonCount(&count);
+            unsigned nsel = 0;
+            for (auto i = 0u; i < count; i++)
+            {
+                LXtPolygonID pol;
+                m_vert.PolygonByIndex(i, &pol);
+                for (auto tri : vert->tris)
+                {
+                    if (tri->pol == pol)
+                    {
+                        nsel ++;
+                        break;
+                    }
+                }
+            }
+            if (nsel == count)
+            {
+                result = m_vert.Remove();
+                if (result != LXe_OK)
+                    return result;
+            }
+        }
+        for (auto [pol, face] : m_faces)
+        {
+            m_poly.Select(pol);
+            result = m_poly.Remove();
+            if (result != LXe_OK)
+                return result;
+        }
+
+        return LXe_OK;
+    }
+
 
     std::vector<CEdgeID>     m_edges;
     std::vector<CVerxID>     m_vertices;
     std::vector<CTriangleID> m_triangles;
+    std::vector<CPartID>     m_parts;
 
     std::unordered_map<LXtPolygonID, CFace> m_faces;
 

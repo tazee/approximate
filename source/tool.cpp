@@ -61,7 +61,7 @@ CTool::CTool()
 	offset_center = sPkt.GetOffset (LXsCATEGORY_TOOL, LXsP_TOOL_ACTCENTER);
     mode_select = sMesh.SetMode("select");
 
-    m_iteration0 = 0;
+    m_proxies0 = 0;
 }
 
 /*
@@ -120,6 +120,7 @@ LxResult CTool::tool_GetOp(void** ppvObj, unsigned flags)
     toolop->offset_falloff = offset_falloff;
     toolop->offset_subject = offset_subject;
     toolop->offset_input = offset_input;
+    toolop->m_flags = flags;
 
 	return LXe_OK;
 }
@@ -172,6 +173,28 @@ LxResult CTool::tmod_Enable(ILxUnknownID obj)
 	}
     return LXe_OK;
 }
+	
+void CTool::tmod_Initialize(ILxUnknownID vts, ILxUnknownID adjust,unsigned int flags)
+{
+    std::cout << "tmod_Initialize" << " flags:" << flags << std::endl;
+	if (!(flags & LXfINITIALIZE_PROCEDURAL))
+    {
+        CLxUser_LayerScan scan;
+        CLxUser_Mesh      mesh;
+        s_layer.BeginScan(LXf_LAYERSCAN_PRIMARY | LXf_LAYERSCAN_MARKPOLYS, scan);
+        if (scan)
+        {
+            scan.BaseMeshByIndex(0, mesh);
+            CLxUser_MeshService mesh_svc;
+            LXtMarkMode pick = mesh_svc.SetMode(LXsMARK_SELECT);
+            unsigned count = MeshUtil::TriangleCount(mesh, pick);
+            std::cout << "count :" << count << std::endl;
+            dyna_Value(ATTRa_PROXIES).SetInt(count);
+            scan.Apply();
+        }
+    }
+
+}
 
 LxResult CTool::tmod_Down(ILxUnknownID vts, ILxUnknownID adjust)
 {
@@ -180,7 +203,7 @@ LxResult CTool::tmod_Down(ILxUnknownID vts, ILxUnknownID adjust)
 	LXpToolActionCenter* acen = (LXpToolActionCenter *) vec.Read (offset_center);
 	LXpToolInputEvent*   ipkt = (LXpToolInputEvent *) vec.Read (offset_input);
 
-    dyna_Value(ATTRa_ITERATION).GetInt(&m_iteration0);
+    dyna_Value(ATTRa_ITERATION).GetInt(&m_proxies0);
 
     return LXe_TRUE;
 }
@@ -192,15 +215,15 @@ void CTool::tmod_Move(ILxUnknownID vts, ILxUnknownID adjust)
     LXpToolScreenEvent*  spak = static_cast<LXpToolScreenEvent*>(vec.Read(offset_screen));
 
     double delta = spak->cx - spak->px;
-    int iteration = m_iteration0 + static_cast<int>(delta * 0.1);
-    if (iteration < 0)
-        iteration = 0;
-    at.SetInt(ATTRa_ITERATION, iteration);
+    int proxies = m_proxies0 + static_cast<int>(delta * 0.1);
+    if (proxies < 0)
+        proxies = 0;
+    at.SetInt(ATTRa_PROXIES, proxies);
 }
 
 void CTool::tmod_Up(ILxUnknownID vts, ILxUnknownID adjust)
 {
-    m_iteration0 = 0;
+    m_proxies0 = 0;
 }
 
 void CTool::atrui_UIHints2(unsigned int index, CLxUser_UIHints& hints)
@@ -225,6 +248,7 @@ LxResult CTool::atrui_DisableMsg (unsigned int index, ILxUnknownID msg)
 
     switch (index) {
         case ATTRa_SEGMENT:
+        case ATTRa_SETCOLOR:
             if (mode != CApproximate::SEGMENTATION)
             {
                 message.SetCode (LXe_DISABLED);
@@ -233,18 +257,16 @@ LxResult CTool::atrui_DisableMsg (unsigned int index, ILxUnknownID msg)
             }
             break;
         case ATTRa_SSET:
+            if (mode != CApproximate::SEGMENTATION)
+            {
+                message.SetCode (LXe_DISABLED);
+                message.SetMessage ("tool.approximate", "OnlySegmentation", 0);
+                return LXe_DISABLED;
+            }
             if (segment != CApproximate::EDGE_SSET)
             {
                 message.SetCode (LXe_DISABLED);
                 message.SetMessage ("tool.approximate", "OnlyEdgeSset", 0);
-                return LXe_DISABLED;
-            }
-            break;
-        case ATTRa_SETCOLOR:
-            if ((segment != CApproximate::POLY_MATR) && (segment != CApproximate::POLY_PART))
-            {
-                message.SetCode (LXe_DISABLED);
-                message.SetMessage ("tool.approximate", "OnlyPolyTags", 0);
                 return LXe_DISABLED;
             }
             break;
@@ -323,8 +345,6 @@ LxResult CTool::cui_Enabled (const char *channelName, ILxUnknownID msg_obj, ILxU
     {
         if ((chan_read.IValue (item, ATTRs_MODE) != CApproximate::SEGMENTATION))
 		    return LXe_CMD_DISABLED;
-        if ((chan_read.IValue (item, ATTRs_SEGMENT) == CApproximate::EDGE_SSET))
-		    return LXe_CMD_DISABLED;
     }
 	else if (name == ATTRs_NEWMESH)
     {
@@ -343,7 +363,7 @@ LxResult CTool::cui_DependencyCount (const char *channelName, unsigned *count)
 	else if (std::string(channelName) == ATTRs_SSET)
 		count[0] = 2;
 	else if (std::string(channelName) == ATTRs_SETCOLOR)
-		count[0] = 2;
+		count[0] = 1;
 	else if (std::string(channelName) == ATTRs_NEWMESH)
 		count[0] = 1;
 	return LXe_OK;
@@ -374,16 +394,7 @@ LxResult CTool::cui_DependencyByIndex (const char *channelName, unsigned index, 
 	}
 	else if (std::string(channelName) == ATTRs_SETCOLOR)
 	{
-        if (index == 0)
-        {
-            depChannel[0] = ATTRs_MODE;
-            return LXe_OK;
-        }
-        else if (index == 1)
-        {
-            depChannel[0] = ATTRs_SEGMENT;
-            return LXe_OK;
-        }
+        depChannel[0] = ATTRs_MODE;
 		return LXe_OK;
 	}
 	else if (std::string(channelName) == ATTRs_NEWMESH)
@@ -449,8 +460,8 @@ LxResult CToolOp::top_Evaluate(ILxUnknownID vts)
             }
             else
             {
-                edit_mesh.Clear();
                 vsa.WriteApproximation(edit_mesh);
+                vsa.m_cmesh.Remove(edit_mesh);
             }
         }
         else if (vsa.m_mode == CApproximate::SEGMENTATION)
@@ -463,6 +474,20 @@ LxResult CToolOp::top_Evaluate(ILxUnknownID vts)
     }
 
     scan.Apply();
+
+    if ((m_flags &LXiTOOLOP_TOOLPIPE) && (m_mode == CApproximate::SEGMENTATION))
+    {
+        CLxUser_VMapPacketTranslation pkt_vmap;
+        pkt_vmap.autoInit();
+        if (m_set_color)
+        {
+            CLxUser_SelectionService s_sel;
+            void* packet = pkt_vmap.Packet(LXi_VMAP_RGB, "Segment");
+            LXtID4 selID = s_sel.LookupType (LXsSELTYP_VERTEXMAP);
+            s_sel.Drop(selID);
+            s_sel.Select(selID, packet);
+        }
+    }
     return LXe_OK;
 }
 

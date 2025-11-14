@@ -1364,5 +1364,30 @@ static LxResult NewMesh (CLxUser_Mesh& new_mesh)
     return LXe_FAILED;
 }
 
+static unsigned TriangleCount (CLxUser_Mesh& mesh, LXtMarkMode pick)
+{
+    unsigned tri_count = 0;
+
+    CLxUser_Polygon poly;
+    poly.fromMesh(mesh);
+
+    unsigned count;
+    mesh.PolygonCount(&count);
+    for (auto i = 0u; i < count; i++)
+    {
+        poly.SelectByIndex(i);
+        if (poly.TestMarks(pick) == LXe_FALSE)
+            continue;
+        LXtID4 type;
+        poly.Type(&type);
+        if ((type != LXiPTYP_FACE) && (type != LXiPTYP_SUBD) && (type != LXiPTYP_PSUB))
+            continue;
+        unsigned vrt_count;
+        poly.VertexCount(&vrt_count);
+        tri_count += (vrt_count - 2);
+    }
+    return tri_count;
+}
+
 }; // MeshUtil
 
