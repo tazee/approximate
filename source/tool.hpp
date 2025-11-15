@@ -31,8 +31,8 @@
 
 using namespace lx_err;
 
-#define SRVNAME_TOOL   "tool.approximate"
-#define SRVNAME_TOOLOP "toolop.approximate"
+const char* SRVNAME_TOOL = "tool.approximate";
+const char* SRVNAME_TOOLOP = "toolop.approximate";
 
 #define ATTRs_MODE      "mode"
 #define ATTRs_PROXIES   "proxies"
@@ -49,8 +49,6 @@ using namespace lx_err;
 #define ATTRa_SEGMENT   4
 #define ATTRa_SSET      5
 #define ATTRa_SETCOLOR  6
-
-#define ATTRs_OUTPUT    
 
 #ifndef LXx_OVERRIDE
 #define LXx_OVERRIDE override
@@ -102,7 +100,7 @@ public:
 	LxResult	tool_GetOp(void **ppvObj, unsigned flags) LXx_OVERRIDE;
 
     unsigned    tmod_Flags() LXx_OVERRIDE;
-	//void		tmod_Initialize (ILxUnknownID vts, ILxUnknownID adjust, unsigned flags) LXx_OVERRIDE;
+	void		tmod_Initialize (ILxUnknownID vts, ILxUnknownID adjust, unsigned flags) LXx_OVERRIDE;
     LxResult    tmod_Enable(ILxUnknownID obj) LXx_OVERRIDE;
     LxResult    tmod_Down(ILxUnknownID vts, ILxUnknownID adjust) LXx_OVERRIDE;
     void        tmod_Move(ILxUnknownID vts, ILxUnknownID adjust) LXx_OVERRIDE;

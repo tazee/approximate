@@ -122,6 +122,11 @@ LxResult CTool::tool_GetOp(void** ppvObj, unsigned flags)
     toolop->offset_input = offset_input;
     toolop->m_flags = flags;
 
+	if (flags & LXfINITIALIZE_PROCEDURAL)
+    {
+        toolop->m_new_mesh = 0;
+    }
+
 	return LXe_OK;
 }
 
@@ -173,27 +178,9 @@ LxResult CTool::tmod_Enable(ILxUnknownID obj)
 	}
     return LXe_OK;
 }
-	
+
 void CTool::tmod_Initialize(ILxUnknownID vts, ILxUnknownID adjust,unsigned int flags)
 {
-    std::cout << "tmod_Initialize" << " flags:" << flags << std::endl;
-	if (!(flags & LXfINITIALIZE_PROCEDURAL))
-    {
-        CLxUser_LayerScan scan;
-        CLxUser_Mesh      mesh;
-        s_layer.BeginScan(LXf_LAYERSCAN_PRIMARY | LXf_LAYERSCAN_MARKPOLYS, scan);
-        if (scan)
-        {
-            scan.BaseMeshByIndex(0, mesh);
-            CLxUser_MeshService mesh_svc;
-            LXtMarkMode pick = mesh_svc.SetMode(LXsMARK_SELECT);
-            unsigned count = MeshUtil::TriangleCount(mesh, pick);
-            std::cout << "count :" << count << std::endl;
-            dyna_Value(ATTRa_PROXIES).SetInt(count);
-            scan.Apply();
-        }
-    }
-
 }
 
 LxResult CTool::tmod_Down(ILxUnknownID vts, ILxUnknownID adjust)
@@ -203,7 +190,7 @@ LxResult CTool::tmod_Down(ILxUnknownID vts, ILxUnknownID adjust)
 	LXpToolActionCenter* acen = (LXpToolActionCenter *) vec.Read (offset_center);
 	LXpToolInputEvent*   ipkt = (LXpToolInputEvent *) vec.Read (offset_input);
 
-    dyna_Value(ATTRa_ITERATION).GetInt(&m_proxies0);
+    dyna_Value(ATTRa_PROXIES).GetInt(&m_proxies0);
 
     return LXe_TRUE;
 }

@@ -10,6 +10,10 @@
 #include <lxsdk/lxvmath.h>
 #include <lxsdk/lxu_matrix.hpp>
 #include <lxsdk/lxu_quaternion.hpp>
+#include <lxsdk/lxresult.h>
+#include <lxsdk/lx_layer.hpp>
+#include <lxsdk/lx_action.hpp>
+#include <lxsdk/lxu_select.hpp>
 
 #include <boost/geometry.hpp>
 #include <boost/geometry/geometries/point_xy.hpp>
@@ -24,6 +28,8 @@ typedef CGAL::Surface_mesh<Point_3>                             Surface_mesh;
 
 #include <vector>
 #include <unordered_set>
+#include <random>
+#include <iostream>
 
 #include "util.hpp"
 #include "cmesh.hpp"
@@ -81,13 +87,11 @@ struct CApproximate
 
     CApproximate()
     {
-        m_mode  = CApproximate::APPROXIMATION;
-        m_proxies = 0;
-        m_iteration = 0;
-        m_preserveBoundary = 0;
-        m_preserveMaterial = 0;
-        m_segment = CApproximate::POLY_MATR;
-        m_new_mesh = 0;
+        m_mode  = Mode::SEGMENTATION;
+        m_proxies = 20;
+        m_iteration = 20;
+        m_segment = Segmentation::POLY_MATR;
+        m_new_mesh = 1;
         m_set_color = 1;
         m_sset = "Segment";
 
