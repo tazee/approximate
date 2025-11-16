@@ -14,36 +14,34 @@ if (WIN32)
     message(STATUS "Configuring for Windows")
 
     set(LXSDK_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../LXSDK-000025")
-    set(VCPKG_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../vcpkg/installed/x64-windows-static")
+    set(LOCAL_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../vcpkg/installed/x64-windows-static")
 
-    set(CGAL_DIR "${VCPKG_ROOT}/share/cgal")
+    set(CGAL_DIR "${LOCAL_LIB_DIR}/share/cgal")
+    set(Boost_INCLUDE_DIR "${LOCAL_LIB_DIR}/include")
+    set(EIGEN_INCLUDE_DIR "${LOCAL_LIB_DIR}/include/eigen3")
+    set(GMP_INCLUDE_DIR "${LOCAL_LIB_DIR}/include")
+    set(MPFR_INCLUDE_DIR "${LOCAL_LIB_DIR}/include")
 
-    set(BOOST_INCLUDE_DIR "${VCPKG_ROOT}/include")
-    set(EIGEN_INCLUDE_DIR "${VCPKG_ROOT}/include/eigen3")
+    set(GMP_LIBRARIES ${LOCAL_LIB_DIR}/lib/gmpxx.lib ${LOCAL_LIB_DIR}/lib/gmp.lib)
+    set(MPFR_LIBRARIES ${LOCAL_LIB_DIR}/lib/mpfr.lib)
 
-    set(GMP_LIB   "${VCPKG_ROOT}/lib/gmp.lib")
-    set(GMPXX_LIB "${VCPKG_ROOT}/lib/gmpxx.lib")
-    set(MPFR_LIB  "${VCPKG_ROOT}/lib/mpfr.lib")
+    set(CMAKE_PREFIX_PATH "$(LOCAL_LIB_DIR)/cgal")
 
 elseif (APPLE)
     message(STATUS "Configuring for macOS")
-    message("Home directory: $ENV{HOME}")
     message("Current directory: ${CMAKE_CURRENT_SOURCE_DIR}")
 
     # Overridable default paths
     set(LXSDK_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../LXSDK-000025")
+    set(LOCAL_LIB_DIR "/usr/local")
 
-    set(CGAL_DIR "/usr/local/opt/cgal")
-    set(EIGEN_PATH "/usr/local/include/eigen3")
+    set(CGAL_DIR "$(LOCAL_LIB_DIR)/opt/cgal")
+    set(Boost_INCLUDE_DIR "${LOCAL_LIB_DIR}/include")
+    set(EIGEN_INCLUDE_DIR "$(LOCAL_LIB_DIR)/include/eigen3")
 
-    set(BOOST_INCLUDE_DIR "/usr/local/include")
+    set(GMP_LIBRARIES ${LOCAL_LIB_DIR}/opt/gmp/lib/libgmpxx.a ${LOCAL_LIB_DIR}/opt/gmp/lib/libgmp.a)
+    set(MPFR_LIBRARIES ${LOCAL_LIB_DIR}/opt/mpfr/lib/libmpfr.a)
 
-    # Homebrew GMP / MPFR
-    set(GMP_LIB   "/usr/local/opt/gmp/lib/libgmp.a")
-    set(GMPXX_LIB "/usr/local/opt/gmp/lib/libgmpxx.a")
-    set(MPFR_LIB  "/usr/local/opt/mpfr/lib/libmpfr.a")
-
-    set(EIGEN_INCLUDE_DIR "${EIGEN_PATH}")
     set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64")
 
 else()
@@ -81,7 +79,7 @@ add_library(approximate SHARED
 target_include_directories(approximate
     PRIVATE
         "${LXSDK_PATH}/include"
-        "${BOOST_INCLUDE_DIR}"
+        "${Boost_INCLUDE_DIR}"
         "${EIGEN_INCLUDE_DIR}"
         ${CGAL_INCLUDE_DIRS}
 )
@@ -89,9 +87,8 @@ target_include_directories(approximate
 target_link_libraries(approximate
     PRIVATE
         lxsdk
-        "${GMPXX_LIB}"
-        "${GMP_LIB}"
-        "${MPFR_LIB}"
+        "${GMP_LIBRARIES}"
+        "${MPFR_LIBRARIES}"
         CGAL::CGAL
 )
 
