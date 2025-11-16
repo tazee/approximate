@@ -89,7 +89,7 @@ struct CApproximate
     {
         m_mode  = Mode::SEGMENTATION;
         m_proxies = 20;
-        m_iteration = 20;
+        m_iteration = 30;
         m_segment = Segmentation::POLY_MATR;
         m_new_mesh = 1;
         m_set_color = 1;

@@ -42,12 +42,14 @@ struct CVerx
     LXtMarkMode                 marks;      // marks for working
     std::vector<CEdgeID>        edge;       // connecting edges
     std::vector<CTriangleID>    tris;       // connecting triangles
+    bool                        collapsed;  // vertex collapsed flag 
 };
 
 struct CEdge
 {
     CVerxID                     v0, v1;  // vertex 1,2
     std::vector<CTriangleID>    tris;       // connecting triangles
+    bool                        collapsed;  // edge collapsed flag
 };
 
 struct CTriangle
@@ -147,6 +149,7 @@ struct CMesh
         CEdgeID edge = m_edges.back();
         edge->v0 = v0;
         edge->v1 = v1;
+        edge->collapsed = false;
         edge->tris.push_back(tri);
 
         v0->edge.push_back(edge);
@@ -316,6 +319,7 @@ struct CMesh
         dv->tri   = tri;
         dv->index = static_cast<unsigned>(m_vertices.size()-1);
         dv->marks = LXiMARK_ANY;
+        dv->collapsed = false;
         m_vert.Select(vrt);
         LXtFVector pos;
         m_vert.Pos(pos);
@@ -495,6 +499,7 @@ struct CMesh
         struct CMesh*   m_context;
     };
 
+    //
     // Build internal mesh representation
     //
     LxResult BuildMesh(CLxUser_Mesh& base_mesh)
@@ -507,6 +512,7 @@ struct CMesh
         m_vert.fromMesh(m_mesh);
         m_vmap.fromMesh(m_mesh);
 
+        // triagulate surface polygons.
         triFace.m_mesh = m_mesh;
         triFace.m_poly.fromMesh(m_mesh);
         triFace.m_vert.fromMesh(m_mesh);
@@ -528,6 +534,270 @@ struct CMesh
             m_parts[v->part]->vrts.push_back(v);
         }
         printf("Build mesh with %zu vertices %zu triangles %zu parts\n", m_vertices.size(), m_triangles.size(), m_parts.size());
+        return LXe_OK;
+    }
+
+    //
+    // Write internal mesh representation back to edit mesh
+    //
+    LxResult WriteMesh(CLxUser_Mesh& out_mesh)
+    {
+        //printf("Writing mesh with %zu vertices and %zu triangles\n", m_vertices.size(), m_triangles.size());
+        std::vector<LXtPointID> point_ids(m_vertices.size());
+        m_vert.fromMesh(out_mesh);
+        for (auto& v : m_vertices)
+        {
+            if (v->collapsed)
+                point_ids[v->index] = nullptr;
+            else
+            {
+                LXtPointID new_vrt;
+                LXtVector pos;
+                LXx_VCPY(pos, v->new_pos);
+                m_vert.New(pos, &new_vrt);
+                point_ids[v->index] = new_vrt;
+            }
+        }
+        m_poly.fromMesh(out_mesh);
+
+        for (auto& tri : m_triangles)
+        {
+            if (tri->deleted)
+                continue;
+
+            unsigned int rev = 0;
+            LXtPointID points[3];
+            points[0] = point_ids[tri->v0->index];
+            points[1] = point_ids[tri->v1->index];
+            points[2] = point_ids[tri->v2->index];
+
+            LXtPolygonID new_pol;
+            m_poly.New(LXiPTYP_FACE, points, 3, rev, &new_pol);
+        }
+        return LXe_OK;
+    }
+
+    CEdgeID FetchEdge(CVerxID v0, CVerxID v1)
+    {
+        for (auto& edge : v0->edge)
+        {
+            if ((edge->v0 == v0 && edge->v1 == v1) || (edge->v0 == v1 && edge->v1 == v0))
+            {
+                return edge;
+            }
+        }
+        return nullptr;
+    }
+
+    //
+    // Collapse the edge given by vertex end indices. Merge v1 to v0 when forward is true,
+    // otherwise merge v0 to v1.
+    //
+    LxResult CollapseEdge(int verx0_index, int verx1_index, bool forward)
+    {
+        CVerxID v0 = m_vertices[verx0_index];
+        CVerxID v1 = m_vertices[verx1_index];
+
+        CEdgeID target_edge = FetchEdge(v0, v1);
+        if (!target_edge)
+            return LXe_FAILED;
+
+        if (forward)
+        {
+            // Collapse v1 into v0
+            for (auto& tri : v1->tris)
+            {
+                if (tri->v0 == v1)
+                    tri->v0 = v0;
+                if (tri->v1 == v1)
+                    tri->v1 = v0;
+                if (tri->v2 == v1)
+                    tri->v2 = v0;
+                tri->updated = true;
+                v0->tris.push_back(tri);
+            }
+            for (auto& edge : v1->edge)
+            {
+                if (edge->v0 == v1)
+                    edge->v0 = v0;
+                if (edge->v1 == v1)
+                    edge->v1 = v0;
+                CEdgeID edge1 = FetchEdge(edge->v0, edge->v1);
+                if (edge1 != nullptr && edge1 != edge)
+                    edge->collapsed = true;
+                else
+                    v0->edge.push_back(edge);
+            }
+            v1->collapsed = true;
+        }
+        else
+        {
+            // Collapse v0 into v1
+            for (auto& tri : v0->tris)
+            {
+                if (tri->v0 == v0)
+                    tri->v0 = v1;
+                if (tri->v1 == v0)
+                    tri->v1 = v1;
+                if (tri->v2 == v0)
+                    tri->v2 = v1;
+                tri->updated = true;
+                v1->tris.push_back(tri);
+            }
+            for (auto& edge : v0->edge)
+            {
+                if (edge->v0 == v0)
+                    edge->v0 = v1;
+                if (edge->v1 == v0)
+                    edge->v1 = v1;
+                CEdgeID edge1 = FetchEdge(edge->v0, edge->v1);
+                if (edge1 != nullptr && edge1 != edge)
+                    edge->collapsed = true;
+                else
+                    v1->edge.push_back(edge);
+            }
+            v0->collapsed = true;
+        }
+        target_edge->collapsed = true;
+        for (auto& tri : target_edge->tris)
+        {
+            tri->deleted = true;
+            if (forward)
+            {
+                v1->tris.erase(std::remove(v1->tris.begin(), v1->tris.end(), tri), v1->tris.end());
+            }
+            else
+            {
+                v0->tris.erase(std::remove(v0->tris.begin(), v0->tris.end(), tri), v0->tris.end());
+            }
+            tri->deleted = true;
+        }
+        return LXe_OK;
+    }
+
+    //
+    // Apply the triangle mesh into the give edit mesh. The edit mesh must be an instanced mesh from
+    // the base mesh used for BuildMesh(). This function uses the source polygons as possible when 
+    // are not updated. And it also reuses existing vertices from base mesh as possible.
+    //
+    LxResult ApplyMesh(CLxUser_Mesh& edit_mesh, bool triple)
+    {
+        m_mesh.set(edit_mesh);
+        m_poly.fromMesh(m_mesh);
+        m_vert.fromMesh(m_mesh);
+        m_vmap.fromMesh(m_mesh);
+
+        printf("ApplyMesh mesh with %zu vertices and %zu triangles\n", m_vertices.size(), m_triangles.size());
+        for (auto& v : m_vertices)
+        {
+            m_vert.Select(v->vrt);
+            if (v->collapsed)
+                m_vert.Remove();
+            else
+                m_vert.SetPos(v->new_pos);
+        }
+
+        if (triple)
+        {
+            for (auto& tri : m_triangles)
+            {
+                if (tri->deleted)
+                    continue;
+
+                unsigned int rev = 0;
+                LXtPointID point_ids[3];
+                point_ids[0] = tri->v0->vrt;
+                point_ids[1] = tri->v1->vrt;
+                point_ids[2] = tri->v2->vrt;
+
+                LXtPolygonID new_pol;
+                m_poly.NewProto(LXiPTYP_FACE, point_ids, 3, rev, &new_pol);
+            }
+            for (auto& face : m_faces)
+            {
+                m_poly.Select(face.first);
+                m_poly.Remove();
+            }
+        }
+        else
+        {
+            for (auto& face : m_faces)
+            {
+                unsigned int rev = 0;
+                std::vector<LXtPointID> points = {};
+                GetPointsFromFace(face.second, points);
+                m_poly.Select(face.first);
+                if (points.size() < 3)
+                    m_poly.Remove();
+
+                else if (FaceIsUpdated(face.second) == true)
+                {
+                    m_poly.SetMarks(m_mark_done);
+                    m_poly.SetVertexList(points.data(), static_cast<unsigned>(points.size()), rev);
+                }
+            }
+        }
+        return LXe_OK;
+    }
+
+
+    bool FaceIsUpdated(CFace& face)
+    {
+        for (auto& tri : face.tris)
+        {
+            if (tri->updated || tri->deleted)
+                return true;
+        }
+        return false;
+    }
+
+    //
+    // Get vertex list for the given face.
+    //
+    LxResult GetPointsFromFace(CFace& face, std::vector<LXtPointID>& points)
+    {
+        points.clear();
+        for (auto& tri : face.tris)
+        {
+            if (tri->deleted)
+                continue;
+            if (points.empty())
+            {
+                points.push_back(tri->v0->vrt);
+                points.push_back(tri->v1->vrt);
+                points.push_back(tri->v2->vrt);
+            }
+            else
+            {
+                for (auto i = 0u; i < points.size(); i++)
+                {
+                    LXtPointID vrt = nullptr;
+                    auto j = (i + 1) % points.size();
+                    if (points[i] == tri->v1->vrt && points[j] == tri->v0->vrt)
+                    {
+                        vrt = tri->v2->vrt;
+                    }
+                    else if (points[i] == tri->v2->vrt && points[j] == tri->v1->vrt)
+                    {
+                        vrt = tri->v0->vrt;
+                    }
+                    else if (points[i] == tri->v0->vrt && points[j] == tri->v2->vrt)
+                    {
+                        vrt = tri->v1->vrt;
+                    }
+                    if (vrt != nullptr)
+                    {
+                        points.insert(points.begin() + j, vrt);
+                        break;
+                    }
+                }
+            }
+        }
+        if (points.size() > 2)
+        {
+            if (points.front() == points.back())
+                points.pop_back();
+        }
         return LXe_OK;
     }
 

@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>README.md</title>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+
+<style>
+/* https://github.com/microsoft/vscode/blob/master/extensions/markdown-language-features/media/markdown.css */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+body {
+	font-family: var(--vscode-markdown-font-family, -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif);
+	font-size: var(--vscode-markdown-font-size, 14px);
+	padding: 0 26px;
+	line-height: var(--vscode-markdown-line-height, 22px);
+	word-wrap: break-word;
+}
+
+#code-csp-warning {
+	position: fixed;
+	top: 0;
+	right: 0;
+	color: white;
+	margin: 16px;
+	text-align: center;
+	font-size: 12px;
+	font-family: sans-serif;
+	background-color:#444444;
+	cursor: pointer;
+	padding: 6px;
+	box-shadow: 1px 1px 1px rgba(0,0,0,.25);
+}
+
+#code-csp-warning:hover {
+	text-decoration: none;
+	background-color:#007acc;
+	box-shadow: 2px 2px 2px rgba(0,0,0,.25);
+}
+
+body.scrollBeyondLastLine {
+	margin-bottom: calc(100vh - 22px);
+}
+
+body.showEditorSelection .code-line {
+	position: relative;
+}
+
+body.showEditorSelection .code-active-line:before,
+body.showEditorSelection .code-line:hover:before {
+	content: "";
+	display: block;
+	position: absolute;
+	top: 0;
+	left: -12px;
+	height: 100%;
+}
+
+body.showEditorSelection li.code-active-line:before,
+body.showEditorSelection li.code-line:hover:before {
+	left: -30px;
+}
+
+.vscode-light.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.15);
+}
+
+.vscode-light.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.40);
+}
+
+.vscode-light.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-dark.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.4);
+}
+
+.vscode-dark.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.60);
+}
+
+.vscode-dark.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-high-contrast.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 160, 0, 0.7);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 160, 0, 1);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+img {
+	max-width: 100%;
+	max-height: 100%;
+}
+
+a {
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+a:focus,
+input:focus,
+select:focus,
+textarea:focus {
+	outline: 1px solid -webkit-focus-ring-color;
+	outline-offset: -1px;
+}
+
+hr {
+	border: 0;
+	height: 2px;
+	border-bottom: 2px solid;
+}
+
+h1 {
+	padding-bottom: 0.3em;
+	line-height: 1.2;
+	border-bottom-width: 1px;
+	border-bottom-style: solid;
+}
+
+h1, h2, h3 {
+	font-weight: normal;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+table > thead > tr > th {
+	text-align: left;
+	border-bottom: 1px solid;
+}
+
+table > thead > tr > th,
+table > thead > tr > td,
+table > tbody > tr > th,
+table > tbody > tr > td {
+	padding: 5px 10px;
+}
+
+table > tbody > tr + tr > td {
+	border-top: 1px solid;
+}
+
+blockquote {
+	margin: 0 7px 0 5px;
+	padding: 0 16px 0 10px;
+	border-left-width: 5px;
+	border-left-style: solid;
+}
+
+code {
+	font-family: Menlo, Monaco, Consolas, "Droid Sans Mono", "Courier New", monospace, "Droid Sans Fallback";
+	font-size: 1em;
+	line-height: 1.357em;
+}
+
+body.wordWrap pre {
+	white-space: pre-wrap;
+}
+
+pre:not(.hljs),
+pre.hljs code > div {
+	padding: 16px;
+	border-radius: 3px;
+	overflow: auto;
+}
+
+pre code {
+	color: var(--vscode-editor-foreground);
+	tab-size: 4;
+}
+
+/** Theming */
+
+.vscode-light pre {
+	background-color: rgba(220, 220, 220, 0.4);
+}
+
+.vscode-dark pre {
+	background-color: rgba(10, 10, 10, 0.4);
+}
+
+.vscode-high-contrast pre {
+	background-color: rgb(0, 0, 0);
+}
+
+.vscode-high-contrast h1 {
+	border-color: rgb(0, 0, 0);
+}
+
+.vscode-light table > thead > tr > th {
+	border-color: rgba(0, 0, 0, 0.69);
+}
+
+.vscode-dark table > thead > tr > th {
+	border-color: rgba(255, 255, 255, 0.69);
+}
+
+.vscode-light h1,
+.vscode-light hr,
+.vscode-light table > tbody > tr + tr > td {
+	border-color: rgba(0, 0, 0, 0.18);
+}
+
+.vscode-dark h1,
+.vscode-dark hr,
+.vscode-dark table > tbody > tr + tr > td {
+	border-color: rgba(255, 255, 255, 0.18);
+}
+
+</style>
+
+<style>
+/* Tomorrow Theme */
+/* http://jmblog.github.com/color-themes-for-google-code-highlightjs */
+/* Original theme - https://github.com/chriskempson/tomorrow-theme */
+
+/* Tomorrow Comment */
+.hljs-comment,
+.hljs-quote {
+	color: #8e908c;
+}
+
+/* Tomorrow Red */
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-regexp,
+.hljs-deletion {
+	color: #c82829;
+}
+
+/* Tomorrow Orange */
+.hljs-number,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-literal,
+.hljs-type,
+.hljs-params,
+.hljs-meta,
+.hljs-link {
+	color: #f5871f;
+}
+
+/* Tomorrow Yellow */
+.hljs-attribute {
+	color: #eab700;
+}
+
+/* Tomorrow Green */
+.hljs-string,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition {
+	color: #718c00;
+}
+
+/* Tomorrow Blue */
+.hljs-title,
+.hljs-section {
+	color: #4271ae;
+}
+
+/* Tomorrow Purple */
+.hljs-keyword,
+.hljs-selector-tag {
+	color: #8959a8;
+}
+
+.hljs {
+	display: block;
+	overflow-x: auto;
+	color: #4d4d4c;
+	padding: 0.5em;
+}
+
+.hljs-emphasis {
+	font-style: italic;
+}
+
+.hljs-strong {
+	font-weight: bold;
+}
+</style>
+
+<style>
+/*
+ * Markdown PDF CSS
+ */
+
+ body {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif, "Meiryo";
+	padding: 0 12px;
+}
+
+pre {
+	background-color: #f8f8f8;
+	border: 1px solid #cccccc;
+	border-radius: 3px;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+}
+
+pre:not(.hljs) {
+	padding: 23px;
+	line-height: 19px;
+}
+
+blockquote {
+	background: rgba(127, 127, 127, 0.1);
+	border-color: rgba(0, 122, 204, 0.5);
+}
+
+.emoji {
+	height: 1.4em;
+}
+
+code {
+	font-size: 14px;
+	line-height: 19px;
+}
+
+/* for inline code */
+:not(pre):not(.hljs) > code {
+	color: #C9AE75; /* Change the old color so it seems less like an error */
+	font-size: inherit;
+}
+
+/* Page Break : use <div class="page"/> to insert page break
+-------------------------------------------------------- */
+.page {
+	page-break-after: always;
+}
+
+</style>
+
+<script src="https://unpkg.com/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: document.body.classList.contains('vscode-dark') || document.body.classList.contains('vscode-high-contrast')
+          ? 'dark'
+          : 'default'
+    });
+  </script>
+<h1 id="mesh-approximation-tools-for-modo-plug-in">Mesh Approximation tools for Modo plug-in</h1>
+<p>This is a Modo Plug-in kit to approximate surface polygons by <a href="https://cgal.org">CGAL</a> Triangulated Surface Mesh Approximation.<br><br>
+Triangulated Surface Mesh Approximation package implements the Variational Shape Approximation method to approximate an input surface triangle mesh by a simpler surface triangle mesh. The algorithm proceeds by iterative clustering of triangles, the clustering process being seeded randomly, incrementally or hierarchically.</p>
+<p>This kit contains a direct modeling tool and a procedural mesh operator for Modo macOS and Windows. These tools support two operation modes. <strong>Approximation</strong> mode outputs an approximated surface trinagle mesh constructed by generating a surface triangle mesh which approximates the clusters. <strong>Segmentation</strong> mode outputs segments of input source polygons into polygon tags, edge selection set and color vertex map. These segmentation data is useful for UV unwrap workflow. The boundaries of an edge selection set or polygon tag can be used as seams for UV unwrapping.</p>
+<div align="left">
+<img src="images/bimba.png" style='max-height: 480px; object-fit: contain'/>
+</div>
+<div align="left">
+<img src="images/fandisk.png" style='max-height: 480px; object-fit: contain'/>
+</div>
+Left: source mesh, Middle: color-coded segments, Right: approximated mesh.
+<div align="left">
+<img src="images/unwrap.png" style='max-height: 505px; object-fit: contain'/>
+</div>
+Unwrap segments by UV unwrap tool using Part tag boundaries from Segmentation mode.
+<h2 id="installing">Installing</h2>
+<ul>
+<li>Download lpk from releases. Drag and drop into your Modo viewport. If you're upgrading, delete previous version.</li>
+</ul>
+<h2 id="how-to-use-approximation-tool">How to use Approximation tool</h2>
+<ul>
+<li>The tool version of Approximation can be launched from <strong>Approximate</strong> button on <strong>Polygon</strong> tab of <strong>Model</strong> ToolBar on left.</li>
+<li>The procedural mesh operator version is available on Mesh Operator viewport. That is categorized in Polygon tab.</li>
+</ul>
+<div align="left">
+<img src="images/UI.png" style='max-height: 620px; object-fit: contain'/>
+</div>
+<h2 id="basic-usage-with-the-direct-tool">Basic Usage with the direct tool</h2>
+<ul>
+<li>Activate <strong>Approximate</strong> button on <strong>Polygon</strong> tab of <strong>Model</strong> Modo toolbar.</li>
+<li>Hauling 3D view by LMB to increase <strong>Max of Proxies</strong>.</li>
+<li>Try other options on the tool properties panel.</li>
+</ul>
+<h2 id="tool-propertiesbr">Tool Properties<br></h2>
+<h3 id="approximation-modebr">Approximation mode<br></h3>
+<p><strong>Approximation</strong> mode constructs triangles by Variational Shape Approximation algorithm. This outputs the triangles into new mesh when <strong>New Mesh</strong> option is enabled, otherwise it updates the source mesh. The constructed triangles don't store mesh properties from the source mesh. So, the output triangles do not contain polygon tags, vertex maps and other properties.<br></p>
+<h3 id="segmentation-modebr">Segmentation mode<br></h3>
+<p><strong>Segmentation</strong> mode mode outputs the clusters into which the original polygons have been divided by calculation to the polygon tag or vertex map. When <strong>Segmentaion</strong> is <strong>Material Tag</strong> or <strong>Part Tag</strong>, the cluster identifer is set as polygon tag. The cluster identifier is set as a string with a sequential number starting from 0. If the original mesh consists of multiple parts, it will be a combination of the part number and the sequential number of the cluster, such as &quot;0-0&quot;. <strong>Set Color</strong> outputs the clusters as random colors in RGB color vertex map<br></p>
+<h3 id="max-of-proxiesbr">Max of Proxies<br></h3>
+<p><strong>Max of Proxies</strong> is the maximum number of proxies needed to approximate the geometry and determines when to stop adding proxies. This does not specify the total number of triangles to be output.<br></p>
+<h3 id="iterationbr">Iteration<br></h3>
+<p><strong>Iteration</strong> is the number of clustering interation to minimize the clustering error.</p>
+<h2 id="dependencies">Dependencies</h2>
+<ul>
+<li>LXSDK<br>
+This kit requires Modo SDK (Modo 16.1v8 or later). Download and build LXSDK and set you LXSDK path to LXSDK_PATH in CMakeLists.txt in triagulate.</li>
+<li>CGAL library 6.0.1 (https://github.com/cgal/cgal)<br>
+This also requires CGAL library. Download and CGAL from below and set the include and library path to CMakeLists.txt in triagulate.</li>
+<li>Boost 1.87.0 (https://www.boost.org/)</li>
+<li>GMP 6.3.0 (https://gmplib.org/)</li>
+<li>MPFR 4.2.1 (https://https://www.mpfr.org/)</li>
+</ul>
+<p>If they are not set, the project files are downloaded automatically via FetchContent of cmake</p>
+<h2 id="license">License</h2>
+<pre class="hljs"><code><div>This software is based part on CGAL (The Computational Geometry Algorithms Library):
+Licensed under the GPL-3.0 license.
+https://cgal.org
+</div></code></pre>
+
+</body>
+</html>
