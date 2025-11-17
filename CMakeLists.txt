@@ -18,7 +18,7 @@ if (WIN32)
 
     set(CGAL_DIR "${LOCAL_LIB_DIR}/share/cgal")
     set(Boost_INCLUDE_DIR "${LOCAL_LIB_DIR}/include")
-    set(EIGEN_INCLUDE_DIR "${LOCAL_LIB_DIR}/include/eigen3")
+    set(EIGEN_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../eigen-3.4.0")
     set(GMP_INCLUDE_DIR "${LOCAL_LIB_DIR}/include")
     set(MPFR_INCLUDE_DIR "${LOCAL_LIB_DIR}/include")
 
@@ -37,7 +37,7 @@ elseif (APPLE)
 
     set(CGAL_DIR "$(LOCAL_LIB_DIR)/opt/cgal")
     set(Boost_INCLUDE_DIR "${LOCAL_LIB_DIR}/include")
-    set(EIGEN_INCLUDE_DIR "$(LOCAL_LIB_DIR)/include/eigen3")
+    set(EIGEN_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../eigen-3.4.0")
 
     set(GMP_LIBRARIES ${LOCAL_LIB_DIR}/opt/gmp/lib/libgmpxx.a ${LOCAL_LIB_DIR}/opt/gmp/lib/libgmp.a)
     set(MPFR_LIBRARIES ${LOCAL_LIB_DIR}/opt/mpfr/lib/libmpfr.a)
@@ -51,6 +51,15 @@ endif()
 #
 # ---- LXSDK ----
 #
+if (NOT LXSDK_PATH)
+    FetchContent_Declare( 
+        lxsdk
+        URL https://thefoundry.s3.us-east-1.amazonaws.com/products/modo/16.1v5/lxsdk16.1v5_692025.zip
+    )
+    FetchContent_Populate(lxsdk)
+    message(STATUS "FetchContent lxsdk directory: ${lxsdk_SOURCE_DIR}")
+    set(LXSDK_PATH ${lxsdk_SOURCE_DIR})
+endif()
 
 if (NOT EXISTS "${LXSDK_PATH}/include")
     message(FATAL_ERROR "LXSDK not found at: ${LXSDK_PATH}")
@@ -64,6 +73,27 @@ target_compile_definitions(lxsdk PRIVATE GL_SILENCE_DEPRECATION)
 #
 # ---- Dependencies ----
 #
+if (NOT CGAL_DIR)
+    FetchContent_Declare( 
+        cgal
+        GIT_REPOSITORY https://github.com/CGAL/cgal.git
+        GIT_TAG        v6.0.1
+    )
+    FetchContent_Populate(cgal)
+    message(STATUS "FetchContent cgal directory: ${cgal_SOURCE_DIR}")
+    set(CGAL_DIR ${cgal_SOURCE_DIR})
+endif()
+
+if (NOT EIGEN_INCLUDE_DIR)
+    FetchContent_Declare( 
+        eigen
+        GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
+        GIT_TAG        3.4.0
+    )
+    FetchContent_Populate(eigen)
+    message(STATUS "FetchContent eigen directory: ${eigen_SOURCE_DIR}")
+    set(EIGEN_INCLUDE_DIR ${eigen_SOURCE_DIR})
+endif()
 
 find_package(CGAL REQUIRED)
 
